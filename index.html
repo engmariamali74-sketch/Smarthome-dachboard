@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم المنزل الذكي | Smart Home Dashboard</title>
+    <!-- Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- مكتبة MQTT.js للتوافق مع WebSockets -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <!-- FontAwesome للأيقونات -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #0b1329;
+            background-image: 
+                radial-gradient(circle at 50% 30%, rgba(14, 165, 233, 0.35) 0%, transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.25) 0%, transparent 50%),
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+            background-attachment: fixed;
+
+            /* تفعيل أنيميشن التوهج واللمعان */
+            animation: ambientGlow 6s infinite alternate ease-in-out;
+        }
+
+        /* حركة التوهج بين اللمعان والفتور */
+        @keyframes ambientGlow {
+            0% {
+                filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.2)) brightness(1.1);
+                background-color: #0d1735;
+            }
+            50% {
+                filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.05)) brightness(0.9);
+                background-color: #080d1c;
+            }
+            100% {
+                filter: drop-shadow(0 0 25px rgba(56, 189, 248, 0.35)) brightness(1.25);
+                background-color: #0f1c3f;
+            }
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            transition: all 0.3s ease-in-out;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(56, 189, 248, 0.35);
+            box-shadow: 0 10px 30px -10px rgba(56, 189, 248, 0.2);
+        }
+
+        .icon-box {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .btn-glow-sky:hover {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+        .btn-glow-emerald:hover {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+        .btn-glow-rose:hover {
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+        }
+
+        /* تنسيقات الزر النشط للمضخة */
+        .btn-pump-active {
+            background-color: rgba(14, 165, 233, 0.8) !important;
+            color: #ffffff !important;
+            border-color: #38bdf8 !important;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.8) !important;
+        }
+
+        /* تنسيقات الأزرار النشطة للأبواب */
+        .btn-door-open-active {
+            background-color: rgba(16, 185, 129, 0.8) !important;
+            color: #ffffff !important;
+            border-color: #34d399 !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.8) !important;
+        }
+
+        .btn-door-close-active {
+            background-color: rgba(244, 63, 94, 0.8) !important;
+            color: #ffffff !important;
+            border-color: #fb7185 !important;
+            box-shadow: 0 0 20px rgba(244, 63, 94, 0.8) !important;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen p-4 md:p-8">
+ <!-- Header -->
+    <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-sky-500/20 gap-4">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-sky-400 flex items-center gap-3">
+                <span class="icon-box w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400">
+                    <i class="fa-solid fa-house-signal"></i>
+                </span>
+                لوحة تحكم المنزل الذكي المتكاملة
+            </h1>
+            <p class="text-slate-400 text-sm mt-1">إدارة ومراقبة آنية عبر المايكروكنترولر ESP32 & Arduino Mega</p>
+        </div>
+        <div class="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-slate-700/80 shadow-inner">
+            <span id="status-indicator" class="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+            <span id="status-text" class="text-xs font-semibold text-slate-300">جاري الاتصال بالسيرفر...</span>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- Card 1: الطقس والمظلة الذكية -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-amber-400 flex items-center gap-2">
+                        <span class="icon-box w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                            <i class="fa-solid fa-cloud-sun"></i>
+                        </span>
+                        الطقس والمظلة
+                    </h2>
+                    <span id="forecast-tag" class="text-xs bg-slate-900/80 border border-amber-500/20 text-amber-300 px-2 py-1 rounded-md">جاري القراءة...</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 my-4">
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-sky-500/20 text-center">
+                        <span class="text-slate-400 text-xs block mb-1">الحرارة (DHT11)</span>
+                        <span id="temp-val" class="text-2xl font-bold text-sky-400">-- °C</span>
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-teal-500/20 text-center">
+                        <span class="text-slate-400 text-xs block mb-1">الرطوبة</span>
+                        <span id="hum-val" class="text-2xl font-bold text-teal-400">-- %</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-800 my-2">
+                    <span class="text-xs text-slate-300">حالة المظلة:</span>
+                    <span id="umbrella-status" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400">بانتظار البيانات...</span>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-700/60">
+                <button onclick="toggleUmbrella()" class="w-full py-2.5 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all btn-glow-sky">
+                    <i class="fa-solid fa-umbrella"></i>
+                    تغيير وضع المظلة يدويًا
+                </button>
+            </div>
+        </div>
+
+        <!-- Card 2: أقفال الأبواب السيرفو (Garage & House) -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                        <span class="icon-box w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                            <i class="fa-solid fa-door-closed"></i>
+                        </span>
+                        أقفال الأبواب (RFID & Remote)
+                    </h2>
+                    <span class="icon-box w-7 h-7 rounded-lg bg-slate-800 text-slate-400">
+                        <i class="fa-solid fa-key"></i>
+                    </span>
+                </div>
+
+                <!-- باب الكراج -->
+                <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 mb-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-semibold text-slate-200">باب الكراج (140°)</span>
+                        <span id="garage-status" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">مغلق</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button id="btn-garage-open" onclick="controlDoor('garage_door', 'OPEN')" class="py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium transition-all btn-glow-emerald">
+                            <i class="fa-solid fa-unlock ml-1"></i> فتح
+                        </button>
+                        <button id="btn-garage-close" onclick="controlDoor('garage_door', 'CLOSE')" class="py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-medium transition-all btn-glow-rose">
+                            <i class="fa-solid fa-lock ml-1"></i> إغلاق
+                        </button>
+                    </div>
+                </div>
+
+                <!-- باب المنزل الرئيسي -->
+                <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-semibold text-slate-200">باب المنزل الرئيسي (110°)</span>
+                        <span id="house-status" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">مغلق</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <button id="btn-house-open" onclick="controlDoor('house_door', 'OPEN')" class="py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium transition-all btn-glow-emerald">
+                            <i class="fa-solid fa-unlock ml-1"></i> فتح
+                        </button>
+                        <button id="btn-house-close" onclick="controlDoor('house_door', 'CLOSE')" class="py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-medium transition-all btn-glow-rose">
+                            <i class="fa-solid fa-lock ml-1"></i> إغلاق
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-700/60 text-center">
+                <span class="text-[11px] text-slate-400">يمكن الفتح أيضاً بالبطاقة الذكية RFID تلقائياً</span>
+            </div>
+        </div>
+
+        <!-- Card 3: مضخة نظام الري -->
+        <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-sky-400 flex items-center gap-2">
+                        <span class="icon-box w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30">
+                            <i class="fa-solid fa-faucet-drip"></i>
+                        </span>
+                        نظام الري الآلي
+                    </h2>
+                    <span id="pump-status" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400">متوقفة</span>
+                </div>
+                   <p class="text-xs text-slate-400 mb-6">يتم الري آلياً عند جفاف التربة (A0 > 700)، ويمكنك التحكم بالمضخة يدويًا عبر الأزرار أدناه:</p>
+
+                <div class="grid grid-cols-2 gap-3 my-2">
+                    <button id="btn-pump-on" onclick="controlPump('ON')" class="py-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all btn-glow-sky">
+                        <i class="fa-solid fa-play"></i> تشغيل المضخة
+                    </button>
+                    <button id="btn-pump-off" onclick="controlPump('OFF')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                        <i class="fa-solid fa-stop"></i> إيقاف المضخة
+                    </button>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-700/60 text-center">
+                <span class="text-[11px] text-slate-400">النمط التشغيلي: تلقائي + يدوي مدرج</span>
+            </div>
+        </div>
+
+        <!-- Card 4: إنذارات الأمان والحريق والغاز -->
+        <div class="glass-card rounded-2xl p-5 md:col-span-2 lg:col-span-3">
+            <h2 class="text-lg font-semibold text-rose-400 mb-4 flex items-center gap-2">
+                <span class="icon-box w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </span>
+                حالة الطوارئ والسلامة
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- حالة الحريق -->
+                <div id="fire-card" class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex justify-between items-center transition-all">
+                    <div class="flex items-center gap-3">
+                        <span class="p-3 rounded-lg bg-rose-500/10 text-rose-400">
+                            <i class="fa-solid fa-fire text-xl"></i>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-200">حساس الحريق (Flame)</h3>
+                            <p class="text-xs text-slate-400">مراقبة مستمرة للمحيط</p>
+                        </div>
+                    </div>
+                    <span id="fire-status" class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30">آمن (طبيعي)</span>
+                </div>
+
+                <!-- حالة الغاز -->
+                <div id="gas-card" class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex justify-between items-center transition-all">
+                    <div class="flex items-center gap-3">
+                        <span class="p-3 rounded-lg bg-amber-500/10 text-amber-400">
+                            <i class="fa-solid fa-smog text-xl"></i>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-semibold text-slate-200">حساس تسريب الغاز</h3>
+                            <p class="text-xs text-slate-400">مراقبة جودة الهواء</p>
+                        </div>
+                    </div>
+                    <span id="gas-status" class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30">آمن (طبيعي)</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JavaScript للاتصال مع MQTT والتحكم -->
+    <script>
+        const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+        const clientId = 'web_dashboard_' + Math.random().toString(16).substring(2, 8);
+        const client = mqtt.connect(brokerUrl, { clientId: clientId });
+
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        // عند الاتصال بالسيرفر
+        client.on('connect', () => {
+            statusIndicator.className = "w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]";
+            statusText.innerText = "متصل بالسيرفر (Real-time)";
+            
+            // الاشتراك في المواضيع
+            client.subscribe('smarthome/weather/temp');
+            client.subscribe('smarthome/weather/humidity');
+            client.subscribe('smarthome/laundry/forecast');
+            client.subscribe('smarthome/laundry/umbrella');
+            client.subscribe('smarthome/status/garage_door');
+            client.subscribe('smarthome/status/house_door');
+            client.subscribe('smarthome/status/pump');
+            client.subscribe('smarthome/alerts/fire');
+            client.subscribe('smarthome/alerts/gas');
+        });
+
+        client.on('error', (err) => {
+            statusIndicator.className = "w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]";
+            statusText.innerText = "خطأ في الاتصال!";
+        });
+
+        // استقبال الرسائل القادمة من المتحكم
+        client.on('message', (topic, message) => {
+            const val = message.toString();
+
+            if (topic === 'smarthome/weather/temp') {
+                document.getElementById('temp-val').innerText = val + ' °C';
+            } else if (topic === 'smarthome/weather/humidity') {
+                document.getElementById('hum-val').innerText = val + ' %';
+            } else if (topic === 'smarthome/laundry/forecast') {
+                document.getElementById('forecast-tag').innerText = val;
+            } else if (topic === 'smarthome/laundry/umbrella') {
+                const el = document.getElementById('umbrella-status');
+                if (val === 'Protecting') {
+                    el.innerText = 'مفتوحة (حماية الغسيل)';
+                    el.className = 'text-xs font-bold px-2.5 py-1 rounded bg-sky-950 text-sky-300 border border-sky-500/30';
+                } else if (val === 'Sunny') {
+                    el.innerText = 'مغلقة (تشميس الغسيل)';
+                    el.className = 'text-xs font-bold px-2.5 py-1 rounded bg-amber-950 text-amber-300 border border-amber-500/30';
+                }
+            } else if (topic === 'smarthome/status/garage_door') {
+                const el = document.getElementById('garage-status');
+                const btnOpen = document.getElementById('btn-garage-open');
+                const btnClose = document.getElementById('btn-garage-close');
+
+                if (val === 'Opened') {
+                    el.innerText = 'مفتوح (140°)';
+                    el.className = 'text-xs px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+                    btnOpen.classList.add('btn-door-open-active');
+                    btnClose.classList.remove('btn-door-close-active');
+                } else {
+                    el.innerText = 'مغلق';
+                    el.className = 'text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+                    btnClose.classList.add('btn-door-close-active');
+                    btnOpen.classList.remove('btn-door-open-active');
+                }
+            } else if (topic === 'smarthome/status/house_door') {
+                const el = document.getElementById('house-status');
+                const btnOpen = document.getElementById('btn-house-open');
+                const btnClose = document.getElementById('btn-house-close');
+
+                if (val === 'Opened') {
+                    el.innerText = 'مفتوح (110°)';
+                    el.className = 'text-xs px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+                    btnOpen.classList.add('btn-door-open-active');
+                    btnClose.classList.remove('btn-door-close-active');
+                       } else {
+                    el.innerText = 'مغلق';
+                    el.className = 'text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+                    btnClose.classList.add('btn-door-close-active');
+                    btnOpen.classList.remove('btn-door-open-active');
+                }
+            } else if (topic === 'smarthome/status/pump') {
+                const el = document.getElementById('pump-status');
+                const btnOpen = document.getElementById('btn-house-open');
+                const btnClose = document.getElementById('btn-house-close');
+
+                if (val === 'Opened') {
+                    el.innerText = 'مفتوح (110°)';
+                    el.className = 'text-xs px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40';
+                    btnOpen.classList.add('btn-door-open-active');
+                    btnClose.classList.remove('btn-door-close-active');
+                } else {
+                    el.innerText = 'مغلق';
+                    el.className = 'text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400';
+                    btnClose.classList.add('btn-door-close-active');
+                    btnOpen.classList.remove('btn-door-open-active');
+                }
+            } else if (topic === 'smarthome/status/pump') {
+                const el = document.getElementById('pump-status');
+                const btnOn = document.getElementById('btn-pump-on');
+
+                if (val === 'ON') {
+                    el.innerText = 'تصل المياه (تعمل)';
+                    el.className = 'text-xs px-2.5 py-1 rounded font-bold bg-sky-950 text-sky-300 border border-sky-500/40';
+                    btnOn.classList.add('btn-pump-active');
+                } else {
+                    el.innerText = 'متوقفة';
+                    el.className = 'text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400';
+                    btnOn.classList.remove('btn-pump-active');
+                }
+            } else if (topic === 'smarthome/alerts/fire') {
+                const el = document.getElementById('fire-status');
+                const card = document.getElementById('fire-card');
+                if (val === 'DANGER') {
+                    el.innerText = '⚠️ خطر حريق!';
+                    el.className = 'text-xs font-bold px-3 py-1 rounded-full bg-rose-950 text-rose-300 border border-rose-500 animate-bounce';
+                    card.className = 'bg-rose-950/40 p-4 rounded-xl border border-rose-500/60 flex justify-between items-center transition-all';
+                } else {
+                    el.innerText = 'آمن (طبيعي)';
+                    el.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30';
+                    card.className = 'bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex justify-between items-center transition-all';
+                }
+            } else if (topic === 'smarthome/alerts/gas') {
+                const el = document.getElementById('gas-status');
+                const card = document.getElementById('gas-card');
+                if (val === 'DANGER') {
+                    el.innerText = '⚠️ تسريب غاز!';
+                    el.className = 'text-xs font-bold px-3 py-1 rounded-full bg-amber-950 text-amber-300 border border-amber-500 animate-pulse';
+                    card.className = 'bg-amber-950/40 p-4 rounded-xl border border-amber-500/60 flex justify-between items-center transition-all';
+                } else {
+                    el.innerText = 'آمن (طبيعي)';
+                    el.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30';
+                    card.className = 'bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex justify-between items-center transition-all';
+                }
+            }
+        });
+
+        // دوال إرسال أوامر التحكم وتحديث حالة الأزرار
+        function controlDoor(door, action) {
+            const isGarage = door === 'garage_door';
+            const btnOpen = document.getElementById(isGarage ? 'btn-garage-open' : 'btn-house-open');
+            const btnClose = document.getElementById(isGarage ? 'btn-garage-close' : 'btn-house-close');
+           if (action === 'OPEN') {
+                btnOpen.classList.add('btn-door-open-active');
+                btnClose.classList.remove('btn-door-close-active');
+            } else if (action === 'CLOSE') {
+                btnClose.classList.add('btn-door-close-active');
+                btnOpen.classList.remove('btn-door-open-active');
+            }
+
+            client.publish("smarthome/control/${door}", action);
+        }
+
+        function toggleUmbrella() {
+            client.publish('smarthome/control/umbrella', 'TOGGLE');
+        }
+
+        function controlPump(action) {
+            const btnOn = document.getElementById('btn-pump-on');
+            
+            if (action === 'ON') {
+                btnOn.classList.add('btn-pump-active');
+            } else if (action === 'OFF') {
+                btnOn.classList.remove('btn-pump-active');
+            }
+
+            client.publish('smarthome/control/pump', action);
+        }
+    </script>
+</body>
+</html>
