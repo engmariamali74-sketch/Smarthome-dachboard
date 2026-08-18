@@ -22,12 +22,9 @@
                 linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
             background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
             background-attachment: fixed;
-
-            /* تفعيل أنيميشن التوهج واللمعان */
             animation: ambientGlow 6s infinite alternate ease-in-out;
         }
 
-        /* حركة التوهج بين اللمعان والفتور */
         @keyframes ambientGlow {
             0% {
                 filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.2)) brightness(1.1);
@@ -64,17 +61,10 @@
             transition: all 0.3s ease;
         }
 
-        .btn-glow-sky:hover {
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
-        }
-        .btn-glow-emerald:hover {
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-        }
-        .btn-glow-rose:hover {
-            box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
-        }
+        .btn-glow-sky:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+        .btn-glow-emerald:hover { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+        .btn-glow-rose:hover { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
 
-        /* تنسيقات الزر النشط للمضخة */
         .btn-pump-active {
             background-color: rgba(14, 165, 233, 0.8) !important;
             color: #ffffff !important;
@@ -82,7 +72,6 @@
             box-shadow: 0 0 20px rgba(56, 189, 248, 0.8) !important;
         }
 
-        /* تنسيقات الأزرار النشطة للأبواب */
         .btn-door-open-active {
             background-color: rgba(16, 185, 129, 0.8) !important;
             color: #ffffff !important;
@@ -99,7 +88,7 @@
     </style>
 </head>
 <body class="text-slate-100 min-h-screen p-4 md:p-8">
- <!-- Header -->
+    <!-- Header -->
     <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-sky-500/20 gap-4">
         <div>
             <h1 class="text-2xl md:text-3xl font-bold text-sky-400 flex items-center gap-3">
@@ -108,7 +97,7 @@
                 </span>
                 لوحة تحكم المنزل الذكي 
             </h1>
-            <p class="text-slate-400 text-sm mt-1">إدارة ومراقبة آنية  </p>
+            <p class="text-slate-400 text-sm mt-1">إدارة ومراقبة آنية</p>
         </div>
         <div class="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-slate-700/80 shadow-inner">
             <span id="status-indicator" class="w-3 h-3 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
@@ -221,7 +210,7 @@
                     </h2>
                     <span id="pump-status" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400">متوقفة</span>
                 </div>
-                   <p class="text-xs text-slate-400 mb-6">يتم الري آلياً عند جفاف التربة (A0 > 700)، ويمكنك التحكم بالمضخة يدويًا عبر الأزرار أدناه:</p>
+                <p class="text-xs text-slate-400 mb-6">يتم الري آلياً عند جفاف التربة، ويمكنك التحكم بالمضخة يدويًا عبر الأزرار أدناه:</p>
 
                 <div class="grid grid-cols-2 gap-3 my-2">
                     <button id="btn-pump-on" onclick="controlPump('ON')" class="py-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all btn-glow-sky">
@@ -288,12 +277,11 @@
 
         const statusIndicator = document.getElementById('status-indicator');
         const statusText = document.getElementById('status-text');
-        // عند الاتصال بالسيرفر
+
         client.on('connect', () => {
             statusIndicator.className = "w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]";
             statusText.innerText = "متصل بالسيرفر (Real-time)";
             
-            // الاشتراك في المواضيع
             client.subscribe('smarthome/weather/temp');
             client.subscribe('smarthome/weather/humidity');
             client.subscribe('smarthome/laundry/forecast');
@@ -310,7 +298,6 @@
             statusText.innerText = "خطأ في الاتصال!";
         });
 
-        // استقبال الرسائل القادمة من المتحكم
         client.on('message', (topic, message) => {
             const val = message.toString();
 
@@ -347,22 +334,6 @@
                 }
             } else if (topic === 'smarthome/status/house_door') {
                 const el = document.getElementById('house-status');
-                const btnOpen = document.getElementById('btn-house-open');
-                const btnClose = document.getElementById('btn-house-close');
-
-                if (val === 'Opened') {
-                    el.innerText = 'مفتوح (110°)';
-                    el.className = 'text-xs px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40';
-                    btnOpen.classList.add('btn-door-open-active');
-                    btnClose.classList.remove('btn-door-close-active');
-                       } else {
-                    el.innerText = 'مغلق';
-                    el.className = 'text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400';
-                    btnClose.classList.add('btn-door-close-active');
-                    btnOpen.classList.remove('btn-door-open-active');
-                }
-            } else if (topic === 'smarthome/status/pump') {
-                const el = document.getElementById('pump-status');
                 const btnOpen = document.getElementById('btn-house-open');
                 const btnClose = document.getElementById('btn-house-close');
 
@@ -417,20 +388,8 @@
             }
         });
 
-        // دوال إرسال أوامر التحكم وتحديث حالة الأزرار
         function controlDoor(door, action) {
-            const isGarage = door === 'garage_door';
-            const btnOpen = document.getElementById(isGarage ? 'btn-garage-open' : 'btn-house-open');
-            const btnClose = document.getElementById(isGarage ? 'btn-garage-close' : 'btn-house-close');
-           if (action === 'OPEN') {
-                btnOpen.classList.add('btn-door-open-active');
-                btnClose.classList.remove('btn-door-close-active');
-            } else if (action === 'CLOSE') {
-                btnClose.classList.add('btn-door-close-active');
-                btnOpen.classList.remove('btn-door-open-active');
-            }
-
-            client.publish("smarthome/control/${door}", action);
+            client.publish(`smarthome/control/${door}`, action);
         }
 
         function toggleUmbrella() {
@@ -438,14 +397,6 @@
         }
 
         function controlPump(action) {
-            const btnOn = document.getElementById('btn-pump-on');
-            
-            if (action === 'ON') {
-                btnOn.classList.add('btn-pump-active');
-            } else if (action === 'OFF') {
-                btnOn.classList.remove('btn-pump-active');
-            }
-
             client.publish('smarthome/control/pump', action);
         }
     </script>
